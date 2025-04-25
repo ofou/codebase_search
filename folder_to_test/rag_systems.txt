@@ -1,0 +1,45 @@
+# Retrieval-Augmented Generation (RAG) Systems
+
+Retrieval-Augmented Generation (RAG) is a hybrid approach that combines the strengths of retrieval-based and generation-based AI systems. RAG systems enhance large language models by providing them with relevant information retrieved from external knowledge sources.
+
+## Core Components of RAG Systems
+
+1. **Document Corpus**: A collection of documents, articles, or knowledge base entries that serve as the external knowledge source.
+
+2. **Embedding Engine**: Converts both queries and documents into vector embeddings to enable semantic search.
+
+3. **Vector Database**: Stores document embeddings and enables efficient similarity search.
+
+4. **Retriever**: Finds the most relevant documents based on the query embedding.
+
+5. **Generator**: A language model that produces responses based on the query and retrieved documents.
+
+## RAG Workflow
+
+1. **Indexing Phase**:
+   - Documents are split into chunks
+   - Each chunk is converted into an embedding vector
+   - Vectors are stored in a vector database
+
+2. **Query Phase**:
+   - User query is converted to an embedding
+   - Similar document chunks are retrieved from the vector database
+   - Retrieved chunks and original query are sent to the generator
+   - Generator produces a response that incorporates the retrieved information
+
+## Advantages of RAG
+
+- **Up-to-date Information**: Can access the latest information, unlike models limited to their training data
+- **Verifiable Responses**: Responses can be traced back to source documents
+- **Reduced Hallucination**: Providing relevant context reduces the model's tendency to generate incorrect information
+- **Domain Adaptation**: Can be specialized for specific domains by using relevant document collections
+- **Cost Efficiency**: More efficient than fine-tuning large models on domain-specific data
+
+## Challenges in RAG Systems
+
+- **Retrieval Quality**: The system's performance depends heavily on retrieving the most relevant documents
+- **Context Window Limitations**: LLMs have limits on how much retrieved context they can process
+- **Balancing Retrieved vs. Generated Content**: Finding the right balance between faithfulness to retrieved content and generating novel responses
+- **Handling Contradictory Information**: Resolving conflicts when retrieved documents contain contradictory information
+
+RAG systems represent a significant advancement in AI, enabling more accurate, up-to-date, and trustworthy responses compared to traditional language models.

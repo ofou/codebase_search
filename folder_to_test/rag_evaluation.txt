@@ -1,0 +1,93 @@
+# Evaluating RAG Systems: Metrics and Methods
+
+Evaluating Retrieval-Augmented Generation (RAG) systems is complex because they combine multiple components: retrieval, generation, and their integration. A comprehensive evaluation strategy must assess each component as well as the overall system performance.
+
+## Retrieval Evaluation Metrics
+
+### 1. Precision and Recall
+
+- **Precision@k**: The proportion of retrieved documents in the top-k results that are relevant.
+- **Recall@k**: The proportion of all relevant documents that are retrieved in the top-k results.
+- **F1 Score**: Harmonic mean of precision and recall, balancing both metrics.
+
+### 2. Ranking Metrics
+
+- **Mean Reciprocal Rank (MRR)**: Average of the reciprocal ranks of the first relevant document across queries.
+- **Normalized Discounted Cumulative Gain (NDCG)**: Measures ranking quality, giving higher weight to higher-ranked relevant documents.
+- **Mean Average Precision (MAP)**: Average precision across multiple queries.
+
+### 3. Semantic Similarity Metrics
+
+- **Embedding Similarity**: Cosine similarity between query and retrieved document embeddings.
+- **BERTScore**: Contextual similarity using BERT embeddings.
+- **Sentence-BERT Similarity**: Semantic textual similarity using sentence transformers.
+
+## Generation Evaluation Metrics
+
+### 1. Reference-Based Metrics
+
+- **BLEU/ROUGE/METEOR**: N-gram overlap metrics comparing generated text to reference answers.
+- **BERTScore**: Token similarity using contextual embeddings.
+- **BLEURT**: Learned evaluation metric based on BERT.
+
+### 2. Reference-Free Metrics
+
+- **Perplexity**: Measures how well a probability model predicts a sample.
+- **Fluency**: Grammatical correctness and readability.
+- **Coherence**: Logical flow and consistency of the generated text.
+
+## RAG-Specific Evaluation Metrics
+
+### 1. Faithfulness/Factuality
+
+- **Citation Accuracy**: Whether citations in the generated text correctly reference the retrieved documents.
+- **Hallucination Detection**: Identifying statements not supported by retrieved documents.
+- **Factual Consistency**: Agreement between generated content and retrieved documents.
+
+### 2. Context Relevance
+
+- **Context Precision**: Proportion of retrieved chunks that are actually relevant to the query.
+- **Context Recall**: Proportion of necessary information that is present in the retrieved chunks.
+- **Context Utility**: How effectively the model uses the retrieved context.
+
+### 3. End-to-End Metrics
+
+- **Answer Relevance**: How well the generated answer addresses the query.
+- **Knowledge Integration**: How effectively the model integrates retrieved information.
+- **Human Preference**: Human evaluators' preferences between different systems.
+
+## Evaluation Methods
+
+### 1. Automated Evaluation
+
+- **Benchmark Datasets**: Standard datasets with queries, relevant documents, and reference answers.
+- **Synthetic Query Generation**: Automatically generating test queries from documents.
+- **LLM-as-a-Judge**: Using a separate LLM to evaluate outputs.
+
+### 2. Human Evaluation
+
+- **Side-by-Side Comparison**: Human evaluators compare outputs from different systems.
+- **Likert Scale Ratings**: Rating outputs on dimensions like relevance, accuracy, and helpfulness.
+- **Error Analysis**: Qualitative analysis of system failures.
+
+### 3. Component-wise Evaluation
+
+- **Retrieval-Only Evaluation**: Assessing only the retrieval component.
+- **Generation-Only Evaluation**: Assessing generation with perfect retrieval.
+- **Ablation Studies**: Removing or modifying components to measure their impact.
+
+## Evaluation Challenges
+
+1. **Ground Truth Limitations**: Difficulty in establishing complete sets of relevant documents.
+2. **Subjectivity**: Different evaluators may have different judgments of quality.
+3. **Domain Specificity**: Evaluation metrics may perform differently across domains.
+4. **Multifaceted Quality**: Balancing different aspects of quality (accuracy, helpfulness, conciseness).
+
+## Best Practices
+
+1. **Combine Multiple Metrics**: No single metric captures all aspects of RAG performance.
+2. **Balance Automated and Human Evaluation**: Automated metrics for efficiency, human evaluation for quality.
+3. **Evaluate on Diverse Queries**: Include different query types, difficulties, and domains.
+4. **Continuous Evaluation**: Regularly re-evaluate as the system and data evolve.
+
+Effective evaluation is crucial for developing high-performing RAG systems and should be integrated throughout the development process.

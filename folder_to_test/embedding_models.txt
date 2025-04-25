@@ -1,0 +1,35 @@
+# Embedding Models in Machine Learning
+
+Embedding models are a crucial component of modern natural language processing systems. They convert text, images, or other data into dense vector representations that capture semantic meaning.
+
+## Popular Embedding Models
+
+1. **Word2Vec**: One of the earliest popular word embedding techniques. It comes in two flavors:
+   - Continuous Bag of Words (CBOW): Predicts the current word based on surrounding context
+   - Skip-gram: Predicts surrounding context words given the current word
+
+2. **GloVe (Global Vectors)**: Combines global matrix factorization and local context window methods to create word embeddings.
+
+3. **BERT Embeddings**: Contextual embeddings from the BERT (Bidirectional Encoder Representations from Transformers) model, which considers the full context of a word in a sentence.
+
+4. **Sentence Transformers**: Models specifically designed to create embeddings for entire sentences or paragraphs, not just individual words.
+
+5. **OpenAI Embeddings**: Models like text-embedding-ada-002 that create high-quality embeddings for various NLP tasks.
+
+## Characteristics of Good Embeddings
+
+- **Dimensionality**: Typically ranges from 100 to 1024 dimensions, balancing expressiveness and computational efficiency.
+- **Semantic Similarity**: Similar concepts should have embeddings with high cosine similarity.
+- **Analogical Reasoning**: Support for operations like "king - man + woman = queen".
+- **Clustering**: Words or concepts in the same category should cluster together in the embedding space.
+
+## Applications
+
+Embedding models power many applications including:
+- Semantic search
+- Recommendation systems
+- Document classification
+- Sentiment analysis
+- Machine translation
+
+The quality of embeddings directly impacts the performance of downstream tasks in a RAG (Retrieval-Augmented Generation) system.

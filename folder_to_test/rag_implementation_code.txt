@@ -1,0 +1,364 @@
+# RAG Implementation Code Examples
+
+This document contains code snippets for implementing various components of a Retrieval-Augmented Generation (RAG) system using popular libraries and frameworks.
+
+## Document Processing and Chunking
+
+```python
+import nltk
+from nltk.tokenize import sent_tokenize
+import re
+
+def chunk_by_paragraph(text, max_chunk_size=1000):
+    """Split text into chunks by paragraph boundaries."""
+    paragraphs = text.split("\n\n")
+    chunks = []
+    current_chunk = ""
+    
+    for paragraph in paragraphs:
+        # Skip empty paragraphs
+        if not paragraph.strip():
+            continue
+            
+        # If adding this paragraph exceeds the max size, start a new chunk
+        if len(current_chunk) + len(paragraph) > max_chunk_size and current_chunk:
+            chunks.append(current_chunk.strip())
+            current_chunk = paragraph
+        else:
+            if current_chunk:
+                current_chunk += "\n\n" + paragraph
+            else:
+                current_chunk = paragraph
+    
+    # Add the last chunk if it's not empty
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+        
+    return chunks
+
+def chunk_by_sentences(text, max_sentences=5, overlap=1):
+    """Split text into overlapping chunks of sentences."""
+    sentences = sent_tokenize(text)
+    chunks = []
+    
+    for i in range(0, len(sentences), max_sentences - overlap):
+        # Avoid going out of bounds
+        end_idx = min(i + max_sentences, len(sentences))
+        # Create chunk from sentences
+        chunk = " ".join(sentences[i:end_idx])
+        chunks.append(chunk)
+        
+        # Stop if we've reached the end
+        if end_idx == len(sentences):
+            break
+            
+    return chunks
+```
+
+## Embedding Generation
+
+```python
+import numpy as np
+from sentence_transformers import SentenceTransformer
+import torch
+
+class EmbeddingGenerator:
+    def __init__(self, model_name="all-MiniLM-L6-v2"):
+        self.model = SentenceTransformer(model_name)
+        self.embedding_cache = {}
+        
+    def generate_embeddings(self, texts, batch_size=32, use_cache=True):
+        """Generate embeddings for a list of texts."""
+        results = []
+        texts_to_embed = []
+        indices = []
+        
+        # Check cache first
+        for i, text in enumerate(texts):
+            if use_cache and text in self.embedding_cache:
+                results.append((i, self.embedding_cache[text]))
+            else:
+                texts_to_embed.append(text)
+                indices.append(i)
+        
+        # Generate new embeddings
+        if texts_to_embed:
+            embeddings = self.model.encode(texts_to_embed, batch_size=batch_size, 
+                                          show_progress_bar=len(texts_to_embed) > 100)
+            
+            # Update cache and results
+            for idx, embedding, text in zip(indices, embeddings, texts_to_embed):
+                self.embedding_cache[text] = embedding
+                results.append((idx, embedding))
+        
+        # Sort by original index and return just the embeddings
+        results.sort(key=lambda x: x[0])
+        return np.array([emb for _, emb in results])
+    
+    def similarity_search(self, query, documents, top_k=5):
+        """Find most similar documents to the query."""
+        query_embedding = self.generate_embeddings([query])[0]
+        doc_embeddings = self.generate_embeddings(documents)
+        
+        # Calculate cosine similarities
+        similarities = np.dot(doc_embeddings, query_embedding) / (
+            np.linalg.norm(doc_embeddings, axis=1) * np.linalg.norm(query_embedding)
+        )
+        
+        # Get top-k indices and scores
+        top_indices = np.argsort(similarities)[-top_k:][::-1]
+        top_scores = similarities[top_indices]
+        
+        return [(documents[i], float(score)) for i, score in zip(top_indices, top_scores)]
+```
+
+## Vector Database Integration (with FAISS)
+
+```python
+import faiss
+import numpy as np
+import pickle
+import os
+
+class FAISSVectorStore:
+    def __init__(self, embedding_dim=384):
+        self.index = faiss.IndexFlatL2(embedding_dim)
+        self.documents = []
+        self.embedding_dim = embedding_dim
+        
+    def add_documents(self, documents, embeddings):
+        """Add documents and their embeddings to the index."""
+        if len(documents) != embeddings.shape[0]:
+            raise ValueError("Number of documents and embeddings must match")
+            
+        # Convert embeddings to float32 if needed
+        if embeddings.dtype != np.float32:
+            embeddings = embeddings.astype(np.float32)
+            
+        # Add to index
+        self.index.add(embeddings)
+        # Store original documents
+        self.documents.extend(documents)
+        
+        return len(self.documents)
+        
+    def search(self, query_embedding, top_k=5):
+        """Search for most similar documents."""
+        # Ensure query embedding is in the right format
+        if isinstance(query_embedding, list):
+            query_embedding = np.array(query_embedding, dtype=np.float32)
+        
+        if query_embedding.dtype != np.float32:
+            query_embedding = query_embedding.astype(np.float32)
+            
+        # Reshape if needed
+        if len(query_embedding.shape) == 1:
+            query_embedding = query_embedding.reshape(1, -1)
+            
+        # Search the index
+        distances, indices = self.index.search(query_embedding, top_k)
+        
+        # Return results
+        results = []
+        for i, (dist, idx) in enumerate(zip(distances[0], indices[0])):
+            if idx < len(self.documents) and idx >= 0:  # Valid index
+                results.append({
+                    "document": self.documents[idx],
+                    "score": float(1.0 / (1.0 + dist)),  # Convert distance to similarity score
+                    "index": int(idx)
+                })
+                
+        return results
+        
+    def save(self, directory):
+        """Save the vector store to disk."""
+        os.makedirs(directory, exist_ok=True)
+        
+        # Save the index
+        faiss.write_index(self.index, os.path.join(directory, "index.faiss"))
+        
+        # Save the documents
+        with open(os.path.join(directory, "documents.pkl"), "wb") as f:
+            pickle.dump(self.documents, f)
+            
+    @classmethod
+    def load(cls, directory):
+        """Load a vector store from disk."""
+        # Create instance
+        vector_store = cls()
+        
+        # Load the index
+        vector_store.index = faiss.read_index(os.path.join(directory, "index.faiss"))
+        
+        # Load the documents
+        with open(os.path.join(directory, "documents.pkl"), "rb") as f:
+            vector_store.documents = pickle.load(f)
+            
+        return vector_store
+```
+
+## Complete RAG Pipeline
+
+```python
+import os
+from langchain.llms import OpenAI
+from langchain.prompts import PromptTemplate
+
+class RAGSystem:
+    def __init__(self, embedding_model, vector_store, llm_api_key=None):
+        self.embedding_model = embedding_model
+        self.vector_store = vector_store
+        
+        # Initialize LLM if API key is provided
+        if llm_api_key:
+            os.environ["OPENAI_API_KEY"] = llm_api_key
+            self.llm = OpenAI(temperature=0.7)
+        else:
+            self.llm = None
+            
+        # Define prompt template
+        self.prompt_template = PromptTemplate(
+            input_variables=["query", "context"],
+            template="""
+            Answer the following question based on the provided context. If the answer cannot be determined from the context, say "I don't have enough information to answer this question."
+            
+            Context:
+            {context}
+            
+            Question:
+            {query}
+            
+            Answer:
+            """
+        )
+        
+    def retrieve(self, query, top_k=3):
+        """Retrieve relevant documents for the query."""
+        # Generate query embedding
+        query_embedding = self.embedding_model.generate_embeddings([query])[0]
+        
+        # Search vector store
+        results = self.vector_store.search(query_embedding, top_k=top_k)
+        
+        return results
+        
+    def generate(self, query, retrieved_docs):
+        """Generate a response based on the query and retrieved documents."""
+        if not self.llm:
+            raise ValueError("LLM not initialized. Please provide an API key.")
+            
+        # Combine retrieved documents into context
+        context = "\n\n".join([doc["document"] for doc in retrieved_docs])
+        
+        # Format prompt
+        prompt = self.prompt_template.format(query=query, context=context)
+        
+        # Generate response
+        response = self.llm(prompt)
+        
+        return response
+        
+    def query(self, query, top_k=3):
+        """End-to-end RAG pipeline: retrieve and generate."""
+        # Retrieve relevant documents
+        retrieved_docs = self.retrieve(query, top_k=top_k)
+        
+        # Generate response
+        if retrieved_docs and self.llm:
+            response = self.generate(query, retrieved_docs)
+        else:
+            response = "No relevant information found or LLM not configured."
+            
+        return {
+            "query": query,
+            "retrieved_documents": retrieved_docs,
+            "response": response
+        }
+```
+
+## Evaluation Code
+
+```python
+from sklearn.metrics import precision_recall_fscore_support
+import numpy as np
+
+def evaluate_retrieval(retrieved_docs, relevant_doc_ids):
+    """Evaluate retrieval performance."""
+    retrieved_ids = [doc["index"] for doc in retrieved_docs]
+    
+    # Calculate precision, recall, and F1
+    precision = len(set(retrieved_ids) & set(relevant_doc_ids)) / len(retrieved_ids) if retrieved_ids else 0
+    recall = len(set(retrieved_ids) & set(relevant_doc_ids)) / len(relevant_doc_ids) if relevant_doc_ids else 0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+    
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1
+    }
+
+def evaluate_generation(generated_text, reference_text):
+    """Simple evaluation of generated text against reference."""
+    from rouge import Rouge
+    
+    rouge = Rouge()
+    scores = rouge.get_scores(generated_text, reference_text)
+    
+    return {
+        "rouge1_f": scores[0]["rouge-1"]["f"],
+        "rouge2_f": scores[0]["rouge-2"]["f"],
+        "rougeL_f": scores[0]["rouge-l"]["f"]
+    }
+
+def evaluate_rag_system(rag_system, test_queries, ground_truth):
+    """Evaluate the full RAG system."""
+    results = []
+    
+    for i, query in enumerate(test_queries):
+        # Get system response
+        response = rag_system.query(query)
+        
+        # Evaluate retrieval
+        retrieval_metrics = evaluate_retrieval(
+            response["retrieved_documents"],
+            ground_truth[i]["relevant_doc_ids"]
+        )
+        
+        # Evaluate generation if reference is available
+        generation_metrics = {}
+        if "reference_answer" in ground_truth[i]:
+            generation_metrics = evaluate_generation(
+                response["response"],
+                ground_truth[i]["reference_answer"]
+            )
+            
+        # Combine metrics
+        metrics = {
+            "query_id": i,
+            "retrieval": retrieval_metrics,
+            "generation": generation_metrics
+        }
+        
+        results.append(metrics)
+    
+    # Calculate average metrics
+    avg_metrics = {
+        "avg_precision": np.mean([r["retrieval"]["precision"] for r in results]),
+        "avg_recall": np.mean([r["retrieval"]["recall"] for r in results]),
+        "avg_f1": np.mean([r["retrieval"]["f1"] for r in results]),
+    }
+    
+    if all("generation" in r and r["generation"] for r in results):
+        avg_metrics.update({
+            "avg_rouge1": np.mean([r["generation"]["rouge1_f"] for r in results]),
+            "avg_rouge2": np.mean([r["generation"]["rouge2_f"] for r in results]),
+            "avg_rougeL": np.mean([r["generation"]["rougeL_f"] for r in results]),
+        })
+    
+    return {
+        "individual_results": results,
+        "average_metrics": avg_metrics
+    }
+```
+
+These code examples provide a starting point for implementing a RAG system with document chunking, embedding generation, vector storage, retrieval, generation, and evaluation components.
