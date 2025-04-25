@@ -1,0 +1,65 @@
+{
+  "mcpServers": {
+    "codebase-search": {
+      "command": "/Users/ofou/os/codebase_search/.venv/bin/python3",
+      "args": [
+        "/Users/ofou/os/codebase_search/mcp_codebase_server.py"
+      ],
+      "description": "Semantic codebase search using embeddings",
+      "enabled": true,
+      "transport": "sse",
+      "port": 8086,
+      "tools": {
+        "codebase_search": {
+          "description": "Find code snippets by semantic meaning",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "title": "Query",
+                "type": "string",
+                "description": "The query to search for in the codebase."
+              },
+              "target_directories": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Target Directories",
+                "description": "The directories to search in. If null, all directories are searched."
+              },
+              "explanation": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Explanation",
+                "description": "The explanation of the search query. If null, no explanation is provided."
+              }
+            },
+            "required": [
+              "query",
+              "target_directories"
+            ],
+            "title": "codebase_searchArguments"
+          }
+        }
+      },
+      "timeout": 1800,
+      "disabled": false
+    }
+  }
+}
