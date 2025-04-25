@@ -1,4 +1,4 @@
-# 🔍 Codebase Search MCP Server
+# 🔍 Local `codebase_search` MCP Server
 
 Semantic codebase search using Ollama embeddings via Model Context Protocol (MCP).
 
