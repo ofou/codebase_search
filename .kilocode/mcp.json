@@ -1,11 +1,11 @@
 {
   "mcpServers": {
     "codebase-search": {
-      "command": "/Users/ofou/os/codebase_search/.venv/bin/python3",
+      "command": "python3",
       "args": [
-        "/Users/ofou/os/codebase_search/mcp_codebase_server.py"
+        "/app/mcp_codebase_server.py"
       ],
-      "description": "Semantic codebase search using embeddings",
+      "description": "Semantic codebase search using embeddings with file watching and background indexing",
       "enabled": true,
       "transport": "sse",
       "port": 8086,
@@ -51,10 +51,18 @@
               }
             },
             "required": [
-              "query",
-              "target_directories"
+              "query"
             ],
             "title": "codebase_searchArguments"
+          }
+        },
+        "get_index_status": {
+          "description": "Get the current status of the file index",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "title": "get_index_statusArguments"
           }
         }
       },

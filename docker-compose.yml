@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  codebase-search:
+    build: .
+    ports:
+      - "8086:8086"
+    volumes:
+      - .:/app
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  ollama_data:

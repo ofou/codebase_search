@@ -6,4 +6,4 @@ pytest-asyncio
 pytest-mock
 logging
 requests>=2.31.0
-tqdm # For progress bars in future updates
+tqdm # For progress bars in future updateswatchdog>=3.0.0
