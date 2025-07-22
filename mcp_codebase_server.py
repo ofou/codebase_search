@@ -28,6 +28,7 @@ USE_FALLBACK = False
 # File extensions to ignore (binary files, large data files, etc.)
 IGNORE_EXTENSIONS = [
     ".pyc", ".jpg", ".png", ".gif", ".pdf", ".zip", ".gz", ".class", ".jar", ".*",
+    ".bin", ".exe", ".dll", ".so", ".dylib", ".o", ".a", ".lib",
     ".git", ".cache", ".kilocode", "__pycache__", "node_modules", ".venv"
 ]
 # Max file size in MB to process
