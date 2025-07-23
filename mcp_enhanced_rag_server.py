@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""
+Enhanced MCP server with improved RAG system for codebase search.
+"""
+
 import asyncio
 import json
 import os
@@ -5,7 +10,7 @@ import hashlib
 import glob
 import ollama
 import numpy as np
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional, List, Dict, Any, Set, Tuple
 from mcp.server.fastmcp import FastMCP
 import logging
 import time
@@ -15,11 +20,12 @@ from watchdog.events import FileSystemEventHandler
 import queue
 import signal
 import sys
+from enhanced_rag_system import EnhancedRAGSystem, CodeChunk, SearchResult
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("codebase_search_mcp")
+logger = logging.getLogger("enhanced_rag_mcp")
 
 # Configuration
 EMBEDDING_MODEL = "nomic-embed-text"
@@ -41,6 +47,12 @@ CACHE_DIR = "./.cache"
 ENABLE_BACKGROUND_INDEXING = True
 ENABLE_FILE_WATCHING = True
 INDEX_UPDATE_DELAY = 2.0  # seconds to wait after file change before re-indexing
+# Enhanced RAG settings
+ENABLE_CHUNKING = True
+ENABLE_SEMANTIC_SEARCH = True
+ENABLE_CONTEXT_RETRIEVAL = True
+CHUNK_OVERLAP = 100
+MAX_CHUNK_SIZE = 1000
 
 # Ensure cache directory exists
 if CACHE_EMBEDDINGS:
@@ -48,6 +60,7 @@ if CACHE_EMBEDDINGS:
 
 # Global state
 embedding_cache: Dict[str, list] = {}
+rag_system = EnhancedRAGSystem(EMBEDDING_MODEL)
 file_embeddings: Dict[str, list] = {}
 indexed_files: Set[str] = set()
 file_update_queue = queue.Queue()
@@ -212,7 +225,7 @@ async def find_all_files(search_dirs):
 
 
 async def index_file(filepath: str) -> bool:
-    """Index a single file and store its embedding."""
+    """Index a single file with enhanced RAG system."""
     try:
         if not should_process_file(filepath):
             return False
@@ -223,13 +236,24 @@ async def index_file(filepath: str) -> bool:
         if not content.strip():  # Skip empty files
             return False
 
+        # Use enhanced RAG system for chunking and indexing
+        if ENABLE_CHUNKING:
+            success = await rag_system.index_file(filepath, content)
+            if success:
+                with indexing_lock:
+                    indexed_files.add(filepath)
+                logger.debug(f"Enhanced indexing completed for: {filepath}")
+                return True
+        
+        # Fallback to simple file embedding
         file_embedding = await get_embedding(content)
         if file_embedding:
             with indexing_lock:
                 file_embeddings[filepath] = file_embedding
                 indexed_files.add(filepath)
-            logger.debug(f"Indexed file: {filepath}")
+            logger.debug(f"Simple indexing completed for: {filepath}")
             return True
+            
     except Exception as e:
         logger.warning(f"Error indexing file {filepath}: {e}")
     
@@ -243,6 +267,17 @@ async def remove_file_from_index(filepath: str):
             del file_embeddings[filepath]
         if filepath in indexed_files:
             indexed_files.remove(filepath)
+        
+        # Remove from RAG system
+        if hasattr(rag_system, 'file_chunks') and filepath in rag_system.file_chunks:
+            chunk_ids = rag_system.file_chunks[filepath]
+            for chunk_id in chunk_ids:
+                if chunk_id in rag_system.chunks:
+                    del rag_system.chunks[chunk_id]
+                if chunk_id in rag_system.chunk_metadata:
+                    del rag_system.chunk_metadata[chunk_id]
+            del rag_system.file_chunks[filepath]
+    
     logger.debug(f"Removed file from index: {filepath}")
 
 
@@ -293,7 +328,7 @@ async def initial_indexing(search_dirs: List[str]):
     indexed_count = 0
     
     for i in range(0, len(all_files), batch_size):
-        batch = all_files[i:i + batch_size]
+        batch = all_files[i : i + batch_size]
         logger.info(f"Indexing batch {i // batch_size + 1}/{(len(all_files) + batch_size - 1) // batch_size}")
         
         tasks = [index_file(filepath) for filepath in batch]
@@ -347,28 +382,36 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 
-mcp = FastMCP("CodebaseSearch", sse_port=8086)
+mcp = FastMCP("EnhancedRAGCodebaseSearch", sse_port=8086)
 
 
 @mcp.tool()
-async def codebase_search(
+async def enhanced_codebase_search(
     query: str,
     target_directories: Optional[List[str]] = None,
+    chunk_types: Optional[List[str]] = None,
+    languages: Optional[List[str]] = None,
+    min_similarity: float = 0.1,
+    include_context: bool = True,
     explanation: Optional[str] = None,
 ) -> str:
     """
-    Finds snippets of code from the codebase most relevant to the search query.
+    Enhanced semantic codebase search with intelligent chunking and context retrieval.
 
     Args:
         query: The semantic search query.
         target_directories: Optional list of glob patterns for directories to search within.
-        explanation: One sentence explanation as to why this tool is being used, and how it contributes to the goal.
+        chunk_types: Optional list of chunk types to filter by (function, class, import, code).
+        languages: Optional list of programming languages to filter by.
+        min_similarity: Minimum similarity score threshold.
+        include_context: Whether to include context around matched chunks.
+        explanation: One sentence explanation as to why this tool is being used.
 
     Returns:
-        JSON string with search results.
+        JSON string with enhanced search results including chunks and context.
     """
     start_time = time.time()
-    logger.info(f"Searching codebase for: '{query}' using {EMBEDDING_MODEL}")
+    logger.info(f"Enhanced search for: '{query}' using {EMBEDDING_MODEL}")
     if explanation:
         logger.info(f"Explanation: {explanation}")
 
@@ -376,7 +419,6 @@ async def codebase_search(
     if target_directories:
         search_dirs = target_directories
     else:
-        # Default to current directory and parent directory if not specified
         search_dirs = [".", ".."]
 
     logger.info(f"Target directories: {search_dirs}")
@@ -391,20 +433,95 @@ async def codebase_search(
             indent=2,
         )
 
+    # Use enhanced RAG system for search
+    if ENABLE_CHUNKING and rag_system.chunks:
+        results = await enhanced_search_with_chunks(
+            query, query_embedding, chunk_types, languages, min_similarity, include_context
+        )
+    else:
+        # Fallback to simple file-based search
+        results = await simple_file_search(query, query_embedding, search_dirs)
+
+    elapsed_time = time.time() - start_time
+    logger.info(f"Enhanced search completed in {elapsed_time:.2f} seconds")
+    logger.info(f"Found {len(results)} results")
+
+    return json.dumps(results, indent=2)
+
+
+async def enhanced_search_with_chunks(
+    query: str, 
+    query_embedding: List[float],
+    chunk_types: Optional[List[str]] = None,
+    languages: Optional[List[str]] = None,
+    min_similarity: float = 0.1,
+    include_context: bool = True
+) -> List[Dict[str, Any]]:
+    """Enhanced search using chunked content."""
+    results = []
+    
+    # Filter chunks based on criteria
+    filtered_chunks = []
+    for chunk_id, chunk in rag_system.chunks.items():
+        # Apply filters
+        if chunk_types and chunk.chunk_type not in chunk_types:
+            continue
+        if languages and chunk.language not in languages:
+            continue
+        
+        filtered_chunks.append((chunk_id, chunk))
+    
+    # Calculate similarities for filtered chunks
+    similarities = []
+    for chunk_id, chunk in filtered_chunks:
+        # For now, use simple content embedding
+        # In a full implementation, you'd have pre-computed chunk embeddings
+        chunk_embedding = await get_embedding(chunk.content)
+        if chunk_embedding:
+            similarity = cosine_similarity(query_embedding, chunk_embedding)
+            if similarity >= min_similarity:
+                similarities.append((chunk_id, chunk, similarity))
+    
+    # Sort by similarity
+    similarities.sort(key=lambda x: x[2], reverse=True)
+    
+    # Build results
+    for chunk_id, chunk, similarity in similarities[:TOP_N_RESULTS]:
+        result = {
+            "file": chunk.filepath,
+            "relative_path": os.path.relpath(chunk.filepath, os.getcwd()),
+            "similarity": similarity,
+            "chunk_type": chunk.chunk_type,
+            "language": chunk.language,
+            "start_line": chunk.start_line,
+            "end_line": chunk.end_line,
+            "function_name": chunk.function_name,
+            "class_name": chunk.class_name,
+            "content": chunk.content,
+            "docstring": chunk.docstring
+        }
+        
+        if include_context:
+            result["context"] = rag_system.get_chunk_context(chunk_id)
+        
+        results.append(result)
+    
+    return results
+
+
+async def simple_file_search(query: str, query_embedding: List[float], search_dirs: List[str]) -> List[Dict[str, Any]]:
+    """Simple file-based search as fallback."""
     # Use indexed files if available, otherwise fall back to scanning
     with indexing_lock:
         if file_embeddings:
             available_files = list(file_embeddings.keys())
             logger.info(f"Using {len(available_files)} indexed files")
         else:
-            # Fall back to scanning files
             available_files = await find_all_files(search_dirs)
             logger.info(f"Scanned {len(available_files)} files")
 
     if not available_files:
-        return json.dumps(
-            {"error": "No files found in specified directories."}, indent=2
-        )
+        return []
 
     # Calculate similarities for indexed files
     similarities = {}
@@ -415,54 +532,118 @@ async def codebase_search(
                 similarities[filepath] = similarity
 
     if not similarities:
-        return json.dumps(
-            {
-                "error": "No file embeddings available. Please wait for indexing to complete."
-            },
-            indent=2,
-        )
+        return []
 
     # Get top N results
     sorted_files = sorted(similarities.items(), key=lambda item: item[1], reverse=True)
-    top_results = [
-        {
+    results = []
+    
+    for filepath, score in sorted_files[:TOP_N_RESULTS]:
+        result = {
             "file": filepath,
-            "similarity": score,
             "relative_path": os.path.relpath(filepath, os.getcwd()),
+            "similarity": score,
+            "chunk_type": "file",
+            "language": "unknown",
+            "content": "Full file content not available in simple mode"
         }
-        for filepath, score in sorted_files[:TOP_N_RESULTS]
-    ]
-
-    elapsed_time = time.time() - start_time
-    logger.info(f"Search completed in {elapsed_time:.2f} seconds")
-    logger.info(f"Top {len(top_results)} results found")
-
-    return json.dumps(top_results, indent=2)
+        results.append(result)
+    
+    return results
 
 
 @mcp.tool()
-async def get_index_status() -> str:
+async def get_enhanced_index_status() -> str:
     """
-    Get the current status of the file index.
+    Get the current status of the enhanced file index.
     
     Returns:
-        JSON string with index status information.
+        JSON string with enhanced index status information.
     """
     with indexing_lock:
         status = {
             "indexed_files_count": len(indexed_files),
             "file_embeddings_count": len(file_embeddings),
+            "chunk_count": len(rag_system.chunks),
             "cache_size": len(embedding_cache),
-            "indexed_files": list(indexed_files)[:10],  # First 10 files
+            "enhanced_features": {
+                "chunking_enabled": ENABLE_CHUNKING,
+                "semantic_search_enabled": ENABLE_SEMANTIC_SEARCH,
+                "context_retrieval_enabled": ENABLE_CONTEXT_RETRIEVAL
+            },
+            "chunk_types": {},
+            "languages": {},
             "background_indexing_enabled": ENABLE_BACKGROUND_INDEXING,
             "file_watching_enabled": ENABLE_FILE_WATCHING,
         }
+        
+        # Count chunk types and languages
+        for chunk in rag_system.chunks.values():
+            status["chunk_types"][chunk.chunk_type] = status["chunk_types"].get(chunk.chunk_type, 0) + 1
+            status["languages"][chunk.language] = status["languages"].get(chunk.language, 0) + 1
     
     return json.dumps(status, indent=2)
 
 
+@mcp.tool()
+async def get_file_analysis(filepath: str) -> str:
+    """
+    Get detailed analysis of a specific file.
+    
+    Args:
+        filepath: Path to the file to analyze.
+    
+    Returns:
+        JSON string with file analysis.
+    """
+    try:
+        if not os.path.exists(filepath):
+            return json.dumps({"error": f"File not found: {filepath}"}, indent=2)
+        
+        # Get file info
+        stat = os.stat(filepath)
+        file_size = stat.st_size
+        last_modified = stat.st_mtime
+        
+        # Get file summary from RAG system
+        file_summary = rag_system.get_file_summary(filepath)
+        
+        # Get chunks for this file
+        chunks = []
+        if filepath in rag_system.file_chunks:
+            chunk_ids = rag_system.file_chunks[filepath]
+            for chunk_id in chunk_ids:
+                if chunk_id in rag_system.chunks:
+                    chunk = rag_system.chunks[chunk_id]
+                    chunks.append({
+                        "chunk_type": chunk.chunk_type,
+                        "start_line": chunk.start_line,
+                        "end_line": chunk.end_line,
+                        "function_name": chunk.function_name,
+                        "class_name": chunk.class_name,
+                        "has_docstring": bool(chunk.docstring),
+                        "content_preview": chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content
+                    })
+        
+        analysis = {
+            "filepath": filepath,
+            "relative_path": os.path.relpath(filepath, os.getcwd()),
+            "file_size": file_size,
+            "last_modified": last_modified,
+            "summary": file_summary,
+            "chunks": chunks,
+            "chunk_count": len(chunks),
+            "is_indexed": filepath in indexed_files
+        }
+        
+        return json.dumps(analysis, indent=2)
+        
+    except Exception as e:
+        return json.dumps({"error": f"Error analyzing file: {e}"}, indent=2)
+
+
 async def main():
-    """Main function to start the MCP server with background tasks."""
+    """Main function to start the enhanced MCP server with background tasks."""
     try:
         # Test Ollama connection
         ollama.list()
@@ -487,7 +668,7 @@ async def main():
         background_tasks.append(asyncio.create_task(background_indexer()))
     
     # Run the MCP server
-    logger.info("Starting MCP server with SSE transport on port 8086")
+    logger.info("Starting Enhanced RAG MCP server with SSE transport on port 8086")
     
     try:
         await mcp.run_async()

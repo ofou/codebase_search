@@ -1,0 +1,137 @@
+{
+  "mcpServers": {
+    "enhanced-rag-search": {
+      "command": "python3",
+      "args": [
+        "/app/mcp_enhanced_rag_server.py"
+      ],
+      "description": "Enhanced semantic codebase search with intelligent chunking and context retrieval",
+      "enabled": true,
+      "transport": "sse",
+      "port": 8086,
+      "tools": {
+        "enhanced_codebase_search": {
+          "description": "Enhanced semantic search with intelligent chunking, filtering, and context retrieval",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "title": "Query",
+                "type": "string",
+                "description": "The semantic search query."
+              },
+              "target_directories": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Target Directories",
+                "description": "The directories to search in. If null, all directories are searched."
+              },
+              "chunk_types": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string",
+                      "enum": ["function", "class", "import", "code"]
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Chunk Types",
+                "description": "Filter results by chunk type (function, class, import, code)."
+              },
+              "languages": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Languages",
+                "description": "Filter results by programming language."
+              },
+              "min_similarity": {
+                "type": "number",
+                "default": 0.1,
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "title": "Minimum Similarity",
+                "description": "Minimum similarity score threshold (0.0 to 1.0)."
+              },
+              "include_context": {
+                "type": "boolean",
+                "default": true,
+                "title": "Include Context",
+                "description": "Whether to include context around matched chunks."
+              },
+              "explanation": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Explanation",
+                "description": "One sentence explanation as to why this tool is being used."
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "title": "enhanced_codebase_searchArguments"
+          }
+        },
+        "get_enhanced_index_status": {
+          "description": "Get detailed status of the enhanced file index including chunk statistics",
+          "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "title": "get_enhanced_index_statusArguments"
+          }
+        },
+        "get_file_analysis": {
+          "description": "Get detailed analysis of a specific file including chunks and metadata",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "filepath": {
+                "title": "Filepath",
+                "type": "string",
+                "description": "Path to the file to analyze."
+              }
+            },
+            "required": [
+              "filepath"
+            ],
+            "title": "get_file_analysisArguments"
+          }
+        }
+      },
+      "timeout": 1800,
+      "disabled": false
+    }
+  }
+}
